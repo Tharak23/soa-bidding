@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { useAuth } from "@clerk/nextjs";
+import { useAuth, useUser } from "@clerk/nextjs";
+import { Loader2 } from "lucide-react";
 
 import { BidForm } from "@/components/bid-form";
 import { CancelAuctionButton } from "@/components/cancel-auction-button";
@@ -17,23 +18,45 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { nameFromClerk } from "@/lib/clerk-name";
 import { gatewayFetch } from "@/lib/gateway";
 import { centsToDisplay } from "@/lib/money";
 import { createRealtimeClient } from "@/lib/supabase/browser";
 import type { Auction, Bid } from "@/lib/types";
 
+function collectedIds(auction: Auction, bids: Bid[]) {
+  return [
+    auction.leadingBidderClerkUserId,
+    ...bids.map((bid) => bid.bidderClerkUserId),
+  ].filter((id): id is string => Boolean(id));
+}
+
+function statusVariant(status: string) {
+  if (status === "rejected") {
+    return "destructive" as const;
+  }
+  if (status === "accepted" || status === "won") {
+    return "default" as const;
+  }
+  return "secondary" as const;
+}
+
 export function AuctionRoom({
   auction: initialAuction,
   bids: initialBids,
   userId,
+  names: initialNames,
 }: {
   auction: Auction;
   bids: Bid[];
   userId: string | null;
+  names: Record<string, string>;
 }) {
   const { getToken } = useAuth();
+  const { user } = useUser();
   const [auction, setAuction] = useState(initialAuction);
   const [bids, setBids] = useState(initialBids);
+  const [names, setNames] = useState(initialNames);
 
   async function load() {
     const token = await getToken();
@@ -81,8 +104,53 @@ export function AuctionRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialAuction.id]);
 
+  useEffect(() => {
+    if (!user) {
+      return;
+    }
+    setNames((prev) => ({ ...prev, [user.id]: nameFromClerk(user) }));
+  }, [user]);
+
+  const missingIds = useMemo(() => {
+    return [...new Set(collectedIds(auction, bids))].filter((id) => !names[id]);
+  }, [auction, bids, names]);
+
+  useEffect(() => {
+    if (missingIds.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    void fetch("/whois", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: missingIds }),
+    })
+      .then((res) => (res.ok ? res.json() : { names: {} }))
+      .then((body: { names?: Record<string, string> }) => {
+        if (cancelled || !body.names) {
+          return;
+        }
+        setNames((prev) => ({ ...prev, ...body.names }));
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, [missingIds]);
+
   const currency = "INR";
   const ended = auction.status !== "OPEN" || new Date(auction.endsAt).getTime() <= Date.now();
+  const leadId = auction.leadingBidderClerkUserId;
+  const leadName = leadId ? names[leadId] : null;
+  const leadIsYou = Boolean(leadId && leadId === userId);
+
+  function bidderLabel(clerkUserId: string) {
+    const name = names[clerkUserId];
+    if (!name) {
+      return null;
+    }
+    return name;
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_20rem]">
@@ -133,18 +201,44 @@ export function AuctionRoom({
                     </TableCell>
                   </TableRow>
                 ) : (
-                  bids.map((bid) => (
-                    <TableRow key={bid.id}>
-                      <TableCell>{new Date(bid.createdAt).toLocaleString()}</TableCell>
-                      <TableCell className="font-mono text-xs">
-                        {bid.bidderClerkUserId === userId ? "You" : bid.bidderClerkUserId.slice(0, 12)}
-                      </TableCell>
-                      <TableCell className="tabular">{centsToDisplay(bid.amountCents, currency)}</TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{bid.status}</Badge>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  bids.map((bid) => {
+                    const isLead = auction.leadingBidId === bid.id;
+                    const isYou = bid.bidderClerkUserId === userId;
+                    const name = bidderLabel(bid.bidderClerkUserId);
+                    return (
+                      <TableRow
+                        key={bid.id}
+                        className={isLead && bid.status === "accepted" ? "bg-primary/5" : undefined}
+                      >
+                        <TableCell className="whitespace-nowrap text-muted-foreground">
+                          {new Date(bid.createdAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            {name ? (
+                              <span className="font-medium">{name}</span>
+                            ) : (
+                              <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                            )}
+                            {isYou ? (
+                              <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+                                you
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                        <TableCell className="tabular">{centsToDisplay(bid.amountCents, currency)}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <Badge variant={statusVariant(bid.status)}>{bid.status}</Badge>
+                            {isLead && bid.status === "accepted" ? (
+                              <Badge variant="outline">lead</Badge>
+                            ) : null}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
                 )}
               </TableBody>
             </Table>
@@ -172,10 +266,26 @@ export function AuctionRoom({
             </div>
             <p className="text-sm text-muted-foreground">
               Increment {centsToDisplay(auction.minIncrementCents, currency)}
-              {auction.leadingBidderClerkUserId
-                ? ` · Lead ${auction.leadingBidderClerkUserId === userId ? "you" : auction.leadingBidderClerkUserId.slice(0, 12)}`
-                : " · No lead yet"}
             </p>
+            <div className="flex items-center justify-between gap-2 rounded-lg bg-muted/50 px-3 py-2">
+              <p className="text-xs text-muted-foreground">Lead</p>
+              {leadId ? (
+                <div className="flex min-w-0 items-center gap-1.5">
+                  {leadName ? (
+                    <p className="truncate text-sm font-medium">{leadName}</p>
+                  ) : (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />
+                  )}
+                  {leadIsYou ? (
+                    <Badge variant="outline" className="h-4 px-1.5 text-[10px]">
+                      you
+                    </Badge>
+                  ) : null}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No lead yet</p>
+              )}
+            </div>
             {userId === auction.sellerClerkUserId && auction.status === "OPEN" ? (
               <CancelAuctionButton auctionId={auction.id} />
             ) : null}

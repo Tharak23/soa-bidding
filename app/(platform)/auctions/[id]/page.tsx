@@ -4,6 +4,7 @@ import { api } from "@/lib/api";
 import { AuctionRoom } from "@/components/auction-room";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Card, CardHeader } from "@/components/ui/card";
+import { resolveDisplayNames } from "@/lib/resolve-names";
 import type { Auction, Bid } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -21,7 +22,11 @@ export default async function AuctionDetailPage({
       api<Auction>(`/api/auctions/${id}`),
       api<Bid[]>(`/api/auctions/${id}/bids`),
     ]);
-    return <AuctionRoom auction={auction} bids={bids} userId={userId} />;
+    const names = await resolveDisplayNames([
+      auction.leadingBidderClerkUserId ?? "",
+      ...bids.map((bid) => bid.bidderClerkUserId),
+    ]);
+    return <AuctionRoom auction={auction} bids={bids} userId={userId} names={names} />;
   } catch (error) {
     return (
       <Card>

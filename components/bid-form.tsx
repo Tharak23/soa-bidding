@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@clerk/nextjs";
+import { Loader2 } from "lucide-react";
 
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
@@ -109,7 +110,8 @@ export function BidForm({ auction, onPlaced }: { auction: Auction; onPlaced?: ()
             </Field>
           </FieldGroup>
           <Button type="submit" disabled={saving || auction.status !== "OPEN"}>
-            Bid
+            {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+            {saving ? "Placing…" : "Bid"}
           </Button>
         </form>
       </CardContent>
