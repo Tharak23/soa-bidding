@@ -1,7 +1,9 @@
 import type { ApiError } from "@/lib/types";
 
 export const GATEWAY_URL =
-  process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080";
+  typeof window === "undefined"
+    ? (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080")
+    : "";
 
 export class GatewayError extends Error {
   status: number;
@@ -34,7 +36,13 @@ export async function gatewayFetch<T>(
     return null as T;
   }
 
-  const body = (await res.json().catch(() => ({}))) as ApiError & T;
+  const rawText = await res.text().catch(() => "");
+  let body: any = {};
+  try {
+    body = rawText ? JSON.parse(rawText) : {};
+  } catch {
+    body = { message: rawText || `Request failed (${res.status})` };
+  }
 
   if (!res.ok) {
     throw new GatewayError(

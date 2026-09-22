@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { useAuth } from "@clerk/nextjs";
 
@@ -84,12 +85,25 @@ export function AuctionGrid({ auctions }: { auctions: Auction[] }) {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {filtered.map((auction) => (
-            <Card key={auction.id} className="overflow-hidden">
-              {auction.imageUrl ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img src={auction.imageUrl} alt="" className="h-40 w-full object-cover" />
-              ) : null}
-              <CardHeader>
+            <Card key={auction.id} className="flex h-full flex-col overflow-hidden py-0">
+              <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden bg-muted">
+                {auction.imageUrl ? (
+                  <Image
+                    src={auction.imageUrl}
+                    alt={auction.title}
+                    fill
+                    className="object-cover"
+                    sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                    quality={90}
+                    loading="lazy"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-sm text-muted-foreground">
+                    No image
+                  </div>
+                )}
+              </div>
+              <CardHeader className="pt-4">
                 <div className="flex items-start justify-between gap-2">
                   <CardTitle className="font-bold">{auction.title}</CardTitle>
                   <Badge>{auction.status}</Badge>
@@ -99,7 +113,7 @@ export function AuctionGrid({ auctions }: { auctions: Auction[] }) {
                   {auction.description || "No description"}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="flex flex-col gap-3">
+              <CardContent className="mt-auto flex flex-col gap-3 pb-4">
                 <div className="flex items-end justify-between gap-2">
                   <div>
                     <p className="text-xs text-muted-foreground">Current bid</p>

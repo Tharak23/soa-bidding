@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useAuth } from "@clerk/nextjs";
 
 import { BidForm } from "@/components/bid-form";
@@ -80,19 +81,24 @@ export function AuctionRoom({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialAuction.id]);
 
-  const currency = "USD";
+  const currency = "INR";
   const ended = auction.status !== "OPEN" || new Date(auction.endsAt).getTime() <= Date.now();
 
   return (
     <div className="grid gap-6 lg:grid-cols-[minmax(0,1.2fr)_20rem]">
       <div className="flex flex-col gap-4">
         {auction.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={auction.imageUrl}
-            alt={auction.title}
-            className="aspect-[4/3] w-full rounded-xl object-cover ring-1 ring-foreground/10"
-          />
+          <div className="relative aspect-[16/10] w-full overflow-hidden rounded-xl bg-muted ring-1 ring-foreground/10">
+            <Image
+              src={auction.imageUrl}
+              alt={auction.title}
+              fill
+              className="object-cover"
+              sizes="(max-width: 1024px) 100vw, 65vw"
+              quality={90}
+              priority
+            />
+          </div>
         ) : null}
         <div className="flex flex-wrap items-center gap-2">
           <h1 className="text-2xl font-bold">{auction.title}</h1>

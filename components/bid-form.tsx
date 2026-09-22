@@ -95,7 +95,7 @@ export function BidForm({ auction, onPlaced }: { auction: Auction; onPlaced?: ()
           ) : null}
           <FieldGroup>
             <Field>
-              <FieldLabel htmlFor="bid">Amount ({wallet?.currency ?? "USD"})</FieldLabel>
+              <FieldLabel htmlFor="bid">Amount ({wallet?.currency ?? "INR"})</FieldLabel>
               <Input
                 id="bid"
                 inputMode="decimal"

@@ -23,6 +23,9 @@ import { centsToDisplay } from "@/lib/money";
 import type { Bid } from "@/lib/types";
 import { MoreHorizontal } from "lucide-react";
 
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function ResultsPage() {
   try {
     const bids = await api<Bid[]>("/api/bids/me");
